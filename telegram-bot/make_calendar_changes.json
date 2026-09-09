@@ -1,0 +1,1307 @@
+{
+  "name": "Make Calendar Changes",
+  "nodes": [
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "={{(() => {\n  const items = $('Compare Calendars').all(); // Get all items\n  return items.map(item => {\n    const { date, slot, platoon, name } = item.json;\n    if (!name || name.trim() === \"\") {\n      return `✅ The ${slot} slot in ${platoon} on ${date} has been cleared.`;\n    } else {\n      return `✅ Calendar updated: ${name} has been added to the ${slot} slot in ${platoon} on ${date}.`;\n    }\n  }).join('\\n'); // Combine all messages with line breaks\n})()}}",
+        "additionalFields": {}
+      },
+      "id": "2bc02d91-2d9c-4307-8323-0daafeacb0a4",
+      "name": "Send Calendar Answer",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1340,
+        840
+      ],
+      "executeOnce": true,
+      "credentials": {
+        "telegramApi": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Telegram account 2"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "inputSource": "jsonExample",
+        "jsonExample": "{\n  \"date\": \"7-Jul-25\",\n  \"slot\": \"L3\",\n  \"platoon\": \"P1\",\n  \"name\": \"LCP Shahu Wagh\"\n}"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -720,
+        160
+      ],
+      "id": "250547fd-2b0a-4151-bda7-5be68acd8f7c",
+      "name": "Receive Calendar Updates"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_LEAVE_SHEET_ID",
+          "mode": "list",
+          "cachedResultName": "Firefighter_Leave_Planner",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 2046499556,
+          "mode": "list",
+          "cachedResultName": "Calendar",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        -100,
+        -60
+      ],
+      "id": "e70fd6ca-c54d-459a-8584-e68f48c58218",
+      "name": "Get Calendar Data",
+      "executeOnce": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst results = [];\n\nconst slots = [\"L1\", \"L2\", \"L3\", \"KIV\"];\nconst platoons = [\"P1\", \"P2\"];\n\nfor (const item of items) {\n  const row = item.json;\n  const date = row[\"Date\"];\n\n  for (const slot of slots) {\n    for (const platoon of platoons) {\n      const key = `${platoon} ${slot}`;\n      const name = row[key]?.trim() || \"\";\n\n      results.push({\n        json: {\n          date,\n          slot,\n          platoon,\n          name\n        }\n      });\n    }\n  }\n}\n\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        120,
+        -60
+      ],
+      "id": "59ac2059-2b5e-44a8-a11d-0cd690b7175e",
+      "name": "Convert to identical schema"
+    },
+    {
+      "parameters": {
+        "mergeByFields": {
+          "values": [
+            {
+              "field1": "date",
+              "field2": "date"
+            },
+            {
+              "field1": "slot",
+              "field2": "slot"
+            },
+            {
+              "field1": "platoon",
+              "field2": "platoon"
+            }
+          ]
+        },
+        "resolve": "preferInput2",
+        "options": {
+          "multipleMatches": "first"
+        }
+      },
+      "type": "n8n-nodes-base.compareDatasets",
+      "typeVersion": 2.3,
+      "position": [
+        340,
+        230
+      ],
+      "id": "03f06b85-6a54-43f1-afb4-c69bacad4776",
+      "name": "Compare Calendars",
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const inputItems = $('If contains updates').all();\n\nconst resultMap = new Map();\n\nfor (const item of inputItems) {\n  const { date, slot, platoon, name } = item.json;\n  const key = date.trim();\n\n  if (!resultMap.has(key)) {\n    resultMap.set(key, { Date: key });\n  }\n\n  const row = resultMap.get(key);\n  row[`${platoon} ${slot}`] = name || \"\";\n}\n\nconst results = Array.from(resultMap.values()).map(row => ({ json: row }));\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        760,
+        840
+      ],
+      "id": "6a49d558-18f0-4801-8066-a6b06cc63783",
+      "name": "Convert to spreadsheet schema"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_LEAVE_SHEET_ID",
+          "mode": "list",
+          "cachedResultName": "Firefighter_Leave_Planner",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 2046499556,
+          "mode": "list",
+          "cachedResultName": "Calendar",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "Date"
+          ],
+          "schema": [
+            {
+              "id": "Date",
+              "displayName": "Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "P1 L1",
+              "displayName": "P1 L1",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "P2 L1",
+              "displayName": "P2 L1",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "P1 L2",
+              "displayName": "P1 L2",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "P2 L2",
+              "displayName": "P2 L2",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "P1 L3",
+              "displayName": "P1 L3",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "P2 L3",
+              "displayName": "P2 L3",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "P1 KIV",
+              "displayName": "P1 KIV",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "P2 KIV",
+              "displayName": "P2 KIV",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        980,
+        840
+      ],
+      "id": "78136951-56be-4cce-81b1-4e5e9c73ebfd",
+      "name": "Update changes to spreadsheet",
+      "alwaysOutputData": false,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "Calendar is up to date 🗓️ \nNo changes have been made ✅",
+        "additionalFields": {}
+      },
+      "id": "c8b63a3b-2738-410a-bac4-e2a2d522707a",
+      "name": "Send No Change Answer",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        1220,
+        65
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Telegram account 2"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "db77826e-e56a-446e-a786-ab03084e7f0e",
+              "leftValue": "={{ $('Compare Calendars').first() }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        560,
+        350
+      ],
+      "id": "bef954c4-cb29-4761-9a2d-61c9fa880839",
+      "name": "If contains updates"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        560,
+        50
+      ],
+      "id": "6047b605-e19e-469b-b184-46a815592199",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "132bf747-0691-471d-912d-700a95437969",
+              "leftValue": "={{ $('Convert to identical schema').all().length }}",
+              "rightValue": "={{ $('Merge').all().length }}",
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        780,
+        -40
+      ],
+      "id": "fdd4ba49-c299-48e6-91de-3cc3af15e06a",
+      "name": "If",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_CHATID_SHEET_ID",
+          "mode": "list",
+          "cachedResultName": "STATION Telegram Chat ID",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "ChatID",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID"
+        },
+        "options": {
+          "dataLocationOnSheet": {
+            "values": {
+              "rangeDefinition": "specifyRangeA1",
+              "range": "A1:A2"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        1000,
+        65
+      ],
+      "id": "20ff2bce-d1a4-451e-a69d-10928d037c8f",
+      "name": "Get Chat ID",
+      "executeOnce": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: {} }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        780,
+        250
+      ],
+      "id": "bf70a816-53a9-4097-b6fe-bdd305ceb840",
+      "name": "Dummy Input"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_CHATID_SHEET_ID",
+          "mode": "list",
+          "cachedResultName": "STATION Telegram Chat ID",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "ChatID",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID"
+        },
+        "options": {
+          "dataLocationOnSheet": {
+            "values": {
+              "rangeDefinition": "specifyRangeA1",
+              "range": "A1:A2"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        1160,
+        840
+      ],
+      "id": "1c227fe3-5faa-45d2-8ede-7dff7065937a",
+      "name": "Get Chat ID2",
+      "executeOnce": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "function normalizeDate(inputDate) {\n  // Clean spacing and standardize separators\n  const cleaned = inputDate.trim().replace(/[\\.\\s]+/g, '-').replace(/\\//g, '-');\n\n  // Try direct parsing first\n  let parsed = new Date(cleaned);\n  if (!isNaN(parsed)) {\n    const day = parsed.getDate();\n    const monthShort = parsed.toLocaleString('default', { month: 'short' });\n    const yearShort = parsed.getFullYear().toString().slice(-2);\n    return `${day}-${monthShort}-${yearShort}`;\n  }\n\n  // Try fallback regex DD-MM-YY or DD-MM-YYYY\n  const match = cleaned.match(/^(\\d{1,2})-(\\d{1,2})-(\\d{2,4})$/);\n  if (match) {\n    let [ , dd, mm, yyyy ] = match;\n    dd = parseInt(dd, 10);\n    mm = parseInt(mm, 10) - 1;\n    yyyy = parseInt(yyyy, 10);\n    if (yyyy < 100) yyyy += 2000;\n\n    const fallbackDate = new Date(yyyy, mm, dd);\n    if (!isNaN(fallbackDate)) {\n      const day = fallbackDate.getDate();\n      const monthShort = fallbackDate.toLocaleString('default', { month: 'short' });\n      const yearShort = fallbackDate.getFullYear().toString().slice(-2);\n      return `${day}-${monthShort}-${yearShort}`;\n    }\n  }\n\n  throw new Error(`Unrecognized date format: \"${inputDate}\"`);\n}\n\n// Apply to input items\nconst items = $('Receive Calendar Updates').all();\n\nreturn items.map(item => {\n  const { date, slot, platoon, name } = item.json;\n  const cleanDate = normalizeDate(date);\n\n  return {\n    json: {\n      date: cleanDate,\n      slot,\n      platoon,\n      name\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -20,
+        260
+      ],
+      "id": "0040b5d8-8574-4161-a36e-5c912020b7ba",
+      "name": "Code",
+      "executeOnce": false,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_CHATID_SHEET_ID",
+          "mode": "list",
+          "cachedResultName": "STATION Telegram Chat ID",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "ChatID",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID"
+        },
+        "options": {
+          "dataLocationOnSheet": {
+            "values": {
+              "rangeDefinition": "specifyRangeA1",
+              "range": "A1:A2"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        -540,
+        160
+      ],
+      "id": "4129c150-16f2-475e-ac26-2259845fb64e",
+      "name": "Get Chat ID3",
+      "executeOnce": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "🧠 Comparing new data with existing schedule…",
+        "additionalFields": {}
+      },
+      "id": "0b39d392-1786-4523-933c-0b49912bdecb",
+      "name": "Send Loading Message",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        -360,
+        160
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Telegram account 2"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_CHATID_SHEET_ID",
+          "mode": "list",
+          "cachedResultName": "STATION Telegram Chat ID",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "ChatID",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID"
+        },
+        "options": {
+          "dataLocationOnSheet": {
+            "values": {
+              "rangeDefinition": "specifyRangeA1",
+              "range": "A1:A2"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        740,
+        440
+      ],
+      "id": "f366365a-1d09-4651-bde4-9aaf164d37db",
+      "name": "Get Chat ID4",
+      "executeOnce": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "📤 Uploading updates to calendar…",
+        "additionalFields": {}
+      },
+      "id": "40d18b99-b5a8-41e0-a706-d7baacd0eb22",
+      "name": "Send Loading Message1",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        760,
+        640
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Telegram account 2"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "4fcdbf19-0f26-4a8c-b714-966554e8cedc",
+              "leftValue": "={{ $('Convert to spreadsheet schema').item.json['P1 L1'] }} ",
+              "rightValue": "=^\\s*$",
+              "operator": {
+                "type": "string",
+                "operation": "regex"
+              }
+            },
+            {
+              "id": "e8b52dab-f6d6-46b5-a138-749fcd7ac50e",
+              "leftValue": "={{ $('Convert to spreadsheet schema').item.json['P1 L2'] }}",
+              "rightValue": "^\\s*$",
+              "operator": {
+                "type": "string",
+                "operation": "regex"
+              }
+            },
+            {
+              "id": "fd852523-6251-4fe1-812e-745897222bf6",
+              "leftValue": "={{ $('Convert to spreadsheet schema').item.json['P1 L3'] }}",
+              "rightValue": "^\\s*$",
+              "operator": {
+                "type": "string",
+                "operation": "regex"
+              }
+            },
+            {
+              "id": "34998fb4-6923-473f-ba20-ebcfb5e2e7d1",
+              "leftValue": "={{ $('Convert to spreadsheet schema').item.json['P1 KIV'] }}",
+              "rightValue": "^\\s*$",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            },
+            {
+              "id": "331cbc26-7418-47ab-b546-30712c88b6ff",
+              "leftValue": "={{ $('Convert to spreadsheet schema').item.json['P2 L1'] }}",
+              "rightValue": "^\\s*$",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            },
+            {
+              "id": "aae6e588-cace-4c12-8a1b-5888c560b9c0",
+              "leftValue": "={{ $('Convert to spreadsheet schema').item.json['P2 L2'] }}",
+              "rightValue": "^\\s*$",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            },
+            {
+              "id": "a0ef9920-9888-4855-9165-3134b308d020",
+              "leftValue": "={{ $('Convert to spreadsheet schema').item.json['P2 L3'] }}",
+              "rightValue": "^\\s*$",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            },
+            {
+              "id": "c9b4a2ce-ef45-461f-8268-bf17a4b684ce",
+              "leftValue": "={{ $('Convert to spreadsheet schema').item.json['P2 KIV'] }}",
+              "rightValue": "^\\s*$",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        1340,
+        1040
+      ],
+      "id": "27cb3299-cbe3-4af8-947c-88f1f4d05529",
+      "name": "Filter",
+      "executeOnce": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_LEAVE_SHEET_ID",
+          "mode": "list",
+          "cachedResultName": "Firefighter_Leave_Planner",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 2046499556,
+          "mode": "list",
+          "cachedResultName": "Calendar",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Date",
+              "lookupValue": "={{ $('Filter').item.json.Date }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        1800,
+        1040
+      ],
+      "id": "fbd46d3d-4293-4d70-a7a2-c2ab1c7bdffe",
+      "name": "Get Removed Leave Slot Rows",
+      "executeOnce": false,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map(item => {\n  const row = item.json;\n  const updatedRow = { ...row };\n  const platoons = ['P1', 'P2'];\n  const slots = ['L1', 'L2', 'L3', 'KIV'];\n\n  for (const platoon of platoons) {\n    for (let i = 0; i < slots.length - 1; i++) {\n      const currentKey = `${platoon} ${slots[i]}`;\n      const nextKey = `${platoon} ${slots[i + 1]}`;\n      const currentVal = (row[currentKey] || \"\").trim().toLowerCase();\n      const nextVal = (row[nextKey] || \"\").trim();\n\n      if ((currentVal === \"\" || currentVal === \"n/a\" || currentVal === \"-\") && nextVal !== \"\") {\n        updatedRow[currentKey] = nextVal;\n        updatedRow[nextKey] = \"\";\n      }\n    }\n  }\n\n  return { json: updatedRow };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2020,
+        1040
+      ],
+      "id": "8b7ea3fe-50fa-4430-81f0-dd4763e1e9e7",
+      "name": "Code1",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "chooseBranch",
+        "useDataOfInput": 2
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1140,
+        1040
+      ],
+      "id": "8ecc25c3-a381-4bcf-b545-65222c906c42",
+      "name": "Merge1"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_LEAVE_SHEET_ID",
+          "mode": "list",
+          "cachedResultName": "Firefighter_Leave_Planner",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 2046499556,
+          "mode": "list",
+          "cachedResultName": "Calendar",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "Date"
+          ],
+          "schema": [
+            {
+              "id": "Date",
+              "displayName": "Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "P1 L1",
+              "displayName": "P1 L1",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "P2 L1",
+              "displayName": "P2 L1",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "P1 L2",
+              "displayName": "P1 L2",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "P2 L2",
+              "displayName": "P2 L2",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "P1 L3",
+              "displayName": "P1 L3",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "P2 L3",
+              "displayName": "P2 L3",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "P1 KIV",
+              "displayName": "P1 KIV",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "P2 KIV",
+              "displayName": "P2 KIV",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        2220,
+        1040
+      ],
+      "id": "d6fd5e58-db74-4a26-9031-6ab7df277d3e",
+      "name": "Update changes to spreadsheet1",
+      "alwaysOutputData": false,
+      "executeOnce": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c9b01623-4478-4f60-878c-f8da03f58a0f",
+              "leftValue": "={{ $json }}",
+              "rightValue": "",
+              "operator": {
+                "type": "object",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1560,
+        1040
+      ],
+      "id": "ca959992-35d8-43a9-a4e2-fdd0f1b68f91",
+      "name": "If output available"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1800,
+        1260
+      ],
+      "id": "e5023dcf-bc5f-466d-aa19-f22cd761a746",
+      "name": "No Operation, do nothing"
+    }
+  ],
+  "connections": {
+    "Receive Calendar Updates": {
+      "main": [
+        [
+          {
+            "node": "Get Chat ID3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Calendar Data": {
+      "main": [
+        [
+          {
+            "node": "Convert to identical schema",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert to identical schema": {
+      "main": [
+        [
+          {
+            "node": "Compare Calendars",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compare Calendars": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ],
+        [
+          {
+            "node": "If contains updates",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "If contains updates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert to spreadsheet schema": {
+      "main": [
+        [
+          {
+            "node": "Update changes to spreadsheet",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Update changes to spreadsheet": {
+      "main": [
+        [
+          {
+            "node": "Get Chat ID2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If contains updates": {
+      "main": [
+        [
+          {
+            "node": "Get Chat ID4",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Dummy Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Get Chat ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Chat ID": {
+      "main": [
+        [
+          {
+            "node": "Send No Change Answer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dummy Input": {
+      "main": [
+        [
+          {
+            "node": "Get Chat ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Chat ID2": {
+      "main": [
+        [
+          {
+            "node": "Send Calendar Answer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "Compare Calendars",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Get Chat ID3": {
+      "main": [
+        [
+          {
+            "node": "Send Loading Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Chat ID4": {
+      "main": [
+        [
+          {
+            "node": "Send Loading Message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Loading Message": {
+      "main": [
+        [
+          {
+            "node": "Get Calendar Data",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Loading Message1": {
+      "main": [
+        [
+          {
+            "node": "Convert to spreadsheet schema",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Calendar Answer": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter": {
+      "main": [
+        [
+          {
+            "node": "If output available",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Removed Leave Slot Rows": {
+      "main": [
+        [
+          {
+            "node": "Code1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge1": {
+      "main": [
+        [
+          {
+            "node": "Filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code1": {
+      "main": [
+        [
+          {
+            "node": "Update changes to spreadsheet1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If output available": {
+      "main": [
+        [
+          {
+            "node": "Get Removed Leave Slot Rows",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Operation, do nothing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "id": "WORKFLOW_ID",
+  "tags": []
+}

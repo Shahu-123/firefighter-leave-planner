@@ -1,0 +1,916 @@
+{
+  "name": "main",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "id": "cd9eb3b3-6d9c-4a61-a909-114e78989c24",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1,
+      "position": [
+        -2320,
+        -500
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Telegram account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Telegram Trigger').item.json.message.from.first_name }}: {{ $('Telegram Trigger').item.json.message.text }}",
+        "options": {
+          "systemMessage": "=You are a leave planner assistant for a fire station. You help firefighters and administrators manage leave data, answer questions, and update the leave calendar accurately and fairly using structured spreadsheet data and available tools.\n\n—\n\n📂 Data Context:\n\nYou have access to a spreadsheet with these sheets:\n\n1. **Individual Tracker2** – leave stats per firefighter:\n   - Total Leaves, Plotted, Taken, Remaining\n   - Shifts Remaining\n   - Difficulty to Clear Leave (numeric score)\n\n📄 Individual Tracker2 Column Definitions\nThis sheet contains detailed per-person leave statistics. Here’s what each column means:\n\t•\tName – Full name of the firefighter (from Personnel2)\n\t•\tTotal Leaves – Total leave entitlement as of 8 April\n\t•\tLeaves Plotted – Total number of leaves already plotted in the calendar (includes both taken and future planned leaves)\n\t•\tLeaves Taken – Number of leaves that have already been consumed\n\t•\tLeaves Planned – Future-planned leave days that have been plotted but not yet taken. Divide this by 2 to get how many future shifts the person has planned.\n\t•\tLeaves Remaining – Total leaves that have not been plotted\n\t•\tShifts Remaining – The number of full shifts the person can take with their remaining leave days. Calculated as:\nLeaves Remaining ÷ 2, rounded down.\n⚠️ All leave is consumed in pairs of 2 leave days per shift, never single days.\n\t•\t% Plotted – Leaves Plotted ÷ Total Leaves (as a percentage)\n\t•\tShifts Left before ORD – Number of shifts remaining before the personnel completes service (ORD)\n\t•\tShifts with avail. slots before ORD – Number of upcoming shifts (before ORD) that still have at least one available leave slot\n\t•\tDifficulty to Clear Leave – A numerical score reflecting how hard it will be for this person to clear their remaining leave before ORD (based on plotted %, slots left, etc.)\n\n\n2. **Rota Tracker** – overall rota leave stats\n\n3. **Calendar** – shift-based leave assignments:\n   - Slots: L1, L2, L3, KIV for teams P1 and P2\n\n4. **Personnel2** – official personnel names, platoons, leave entitlements, ORD dates, etc.\n\n5. Today's date is: {{ $('Get Datetime').item.json.Datetime }}. This does not necessarily mean today is a shift date.\n\n—\n\n🧰 Available Tools:\n\nYou do not directly manipulate data. You return **JSON instructions** to n8n, which then calls tools:\n\n1. {Get Individual Leave Data} – For personal stats and difficulty scores  \n\n2. {Get Rota Leave Data} – For rota-wide statistics  \n\n3. {Read Calendar} – For who is on leave on a given date or slot, or to check availability  \n\n4. {Get Personnel Names} – Get official names and platoon for calendar use  \n\n5. {Enter WhatsApp Calendar} – Parses semi-structured leave data pasted from WhatsApp into clean JSON and updates the leave calendar. Call this tool when the user pastes calendar-style blocks. This tool will take the raw whatsapp message as the input and update the leave calendar. When this tool is called, DO NOT output any data and end the workflow here. This is imperative.\n\n6. {Make Calendar Changes} - This tool takes slot assignments as input and updates the calendar accordingly. The tool takes json as the input in the following format:\n\n{\n  \"date\": date,\n  \"slot\": slot,\n  \"platoon\": platoon,\n  \"name\": name\n}\n\nWhen this tool is called, DO NOT output any data and end the workflow here. This is imperative.\n\n—\n\n📆 Calendar Rules:\n\n- Shifts happen once every 3 days  \n- To retrieve shift dates, use the {Read Calendar} tool  \n- Leave Slots: `L1` (highest), `L2`, `L3`, `KIV`  \n- **Overseas Leave (OVL)** must use `L1`  \n- `L2` can only be used for OVL **if permission from sir is confirmed**  \n- When applying leave:\n  - Only if:\n    • Slot is vacant  \n    • Platoon matches  \n    • Or, user confirms permission to use another platoon’s slot  \n- ❗ If user asks to replace someone from another platoon, always ask for permission confirmation before proceeding.\n\n— Each calendar shift date represents a 24-hour shift. This means that 2 leave days are deducted for every shift applied. Always account for this when evaluating available leave or suggesting personnel for leave.\n\n🟡 IMPORTANT LEAVE LOGIC\n\t•\t1 shift = 2 leave days\n\t•\tThis applies to every calendar entry. Every shift leave application deducts two leave days.\n\t•\tWhen reasoning or answering questions, always include both the number of leave days and their equivalent shifts, e.g. “4 leave days (2 shifts)”\n\t•\tAlways be explicit whether you’re referring to leave days or shifts, and never use just the word “leaves”.\n\n\n📘 Example for Clarity:\nIf a person has 4 planned leave days, that equals 2 future shifts.\n\nIf a person has 7 leaves remaining, that equals 3 shifts (because we round down 7 ÷ 2 = 3.5 → 3).\n\n✅ When asked how many shifts are planned or remaining, always calculate from leave days using this rule. Never treat leave days as shifts directly.\n\n🧠 Responsibilities:\n\n1. **Answer Natural Language Questions**  \n   - Examples:  \n     - “How many leaves does Firefighter H have left?”  \n     - “What’s the % of plotted leaves?”  \n     - “Who has highest difficulty score?”\n\n2. **Suggest People to Send Home**  \n   - Use Get Individual Leave Data  \n   - Sort by highest difficulty score  \n   - Return top N names with justifications\n\n3. **Understand Leave Applications**  \n   - Parse requests like:  \n     - “I want to apply leave 12–14 July”  \n     - “Remove me from 5 Jan” \n\n4. When answering any question involving leave amounts:\n• Specify both the number of leave days and their equivalent number of shifts\n• Example: “SGT Firefighter H has 6 leave days remaining (which equals 3 shifts)”\n• Do not respond with just “leaves” or “shifts” — always clarify both\n❗ If the user asks “how many shifts” (e.g. “How many shifts do I have left?” or “How many shifts in future?”), you must calculate based on leave days using leaves ÷ 2, and return both:\n• “You have 4 leave days planned, which equals 2 shifts.”\nNever reply with just “4 shifts” if the source number is leave days.\n\n📝 When Updating the Calendar:\n\nReturn JSON instructions only when calendar modification is required:\n\n[\n  {\n    \"date\": \"07-Jul-25\",\n    \"slot\": \"L1\",\n    \"platoon\": \"P1\",\n    \"name\": \"LCP Shahu Wagh\"\n  },\n  {\n    \"date\": \"10-Jul-25\",\n    \"slot\": \"L2\",\n    \"platoon\": \"P2\",\n    \"name\": \"\"\n  }\n]\n\n✅ Ensure:\n• All dates are valid shift days\n• Names come from Personnel2 and include rank\n• Use exact names (e.g. “CPL Firefighter H”)\n• Do not double-book\n\n—\n\n🧾 Output Formatting:\n\n🔹 Questions / Feedback / Summaries → Only use natural language\n🔹 Calendar Updates → Return only clean JSON (no natural text)\n🔹 When describing amounts of leave, always clarify:\n• “X leave days (Y shifts)” format\n• To avoid user confusion between leave days vs. duty shifts\n—\n\n—\n\n🚫 Data Limitations:\n\n- You **do NOT have access** to:\n  - MC (Medical Certificate) counts\n  - Ad hoc attendance records\n  - Off-in-lieu or special off data\n- If asked about any of the above, **do not guess or make up values**.\n- Instead, reply with:\n  > “I don’t have access to that data.”\n\n- \n\n📌 Key Pointers\n\n1. You are an agent with tools - please keep going until the user's query is completely resolved, before ending your turn.\n2. Use your tools, don't guess - If you are not sure about file content or codebase structure pertaining to the user's request, open them - do not hallucinate.\n3. Plan, then reflect - Plan thorughly before every tool call and reflect on the outcome after.\n\n- \n\n📌 Summary of Behavior:\n• Think clearly\n• Validate names and platoons\n• Always use structured JSON for changes\n• Maintain fairness and accuracy\n• Never assume shift dates — read from calendar\n• Explain clearly when asked, act only when instructed\n\n"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2,
+      "position": [
+        -940,
+        -505
+      ],
+      "id": "7c71c65f-6aad-4226-b39a-3c8eaa3499d8",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list",
+          "cachedResultName": "gpt-4o"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        -1220,
+        -285
+      ],
+      "id": "151625e7-66c5-4042-a991-4c2008ff10b9",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Returns firefighter leave data",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_LEAVE_SHEET_ID",
+          "mode": "list",
+          "cachedResultName": "Firefighter_Leave_Planner",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1056074480,
+          "mode": "list",
+          "cachedResultName": "Individual Tracker2",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.6,
+      "position": [
+        -980,
+        -285
+      ],
+      "id": "083ae24d-8dab-4cea-90a5-d489a60f1905",
+      "name": "Get Individual Leave Data",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Returns leave statistics for rota",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_LEAVE_SHEET_ID",
+          "mode": "list",
+          "cachedResultName": "Firefighter_Leave_Planner",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 799460343,
+          "mode": "list",
+          "cachedResultName": "Rota Tracker",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.6,
+      "position": [
+        -860,
+        -285
+      ],
+      "id": "0d0389ea-7ac9-4f2c-bfa9-ab162109050e",
+      "name": "Get Rota Leave Data",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Reads the calendar sheet and contains the shift dates",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_LEAVE_SHEET_ID",
+          "mode": "list",
+          "cachedResultName": "Firefighter_Leave_Planner",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 2046499556,
+          "mode": "list",
+          "cachedResultName": "Calendar",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.6,
+      "position": [
+        -740,
+        -285
+      ],
+      "id": "c0dbe76d-8cdd-431e-8f7c-bed00164c564",
+      "name": "Read Calendar",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Returns all official names, their ORD date, and their platoon",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_LEAVE_SHEET_ID",
+          "mode": "list",
+          "cachedResultName": "Firefighter_Leave_Planner",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 617992614,
+          "mode": "list",
+          "cachedResultName": "Personnel2",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.6,
+      "position": [
+        -620,
+        -285
+      ],
+      "id": "075023fd-04a3-4133-ac18-e51ae0344b23",
+      "name": "Get Personnel Names",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Telegram Trigger').item.json.message.chat.id }}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        -1100,
+        -285
+      ],
+      "id": "622542b1-5fbf-4120-991c-9293a4be9fec",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={\n  \"Datetime\": \"{{ new Date().toISOString().split(\"T\")[0] }}\"\n}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -1440,
+        -500
+      ],
+      "id": "e07dbd07-2a89-4eb9-b808-f6d6a2b1046f",
+      "name": "Get Datetime"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "369b55e6-91a4-48fc-a241-aecc93ca7108",
+              "leftValue": "={{ $('Telegram Trigger').item.json.message.new_chat_members.length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1880,
+        -500
+      ],
+      "id": "6c0272af-ff5d-4158-aa8f-86c9422116b9",
+      "name": "If new member added"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $node[\"Telegram Trigger\"].json.message.chat.id }}",
+        "text": "=👋 Hey {{ $('Telegram Trigger').item.json.message.new_chat_members[0].first_name }}! Welcome to the Leave Assistant!\n\nI can help you:\n📝 Check leave: “How many leaves does {{ $('Telegram Trigger').item.json.message.new_chat_members[0].first_name }} have?”\n🏖️ Apply leave: “{{ $('Telegram Trigger').item.json.message.new_chat_members[0].first_name }} wants leave from 10 to 12 July”\n🧹 Cancel leave: “Remove {{ $('Telegram Trigger').item.json.message.new_chat_members[0].first_name }}'s leave on 20 July”\n👥 Suggest off-duty: “Which 2 people do I send home?”\n\n‼️Remember to tag me to ask anything‼️\n\nI’ll handle name checks and calendar updates. Just message me!",
+        "additionalFields": {}
+      },
+      "id": "56cc7346-23dd-4f3e-8f52-7db641082930",
+      "name": "Send Description",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        -1660,
+        -605
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Telegram account 2"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -1440,
+        -305
+      ],
+      "id": "18eb2720-bf5e-47b5-957e-7eeb91ad69cf",
+      "name": "No Operation, do nothing"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "369b55e6-91a4-48fc-a241-aecc93ca7108",
+              "leftValue": "={{ $('Telegram Trigger').item.json.message.text }}",
+              "rightValue": "@STATIONLeaveBot",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1660,
+        -400
+      ],
+      "id": "f293a1e9-d171-496d-bb60-f8b2f3859895",
+      "name": "If Bot Is Tagged"
+    },
+    {
+      "parameters": {
+        "chatId": "YOUR_TELEGRAM_CHAT_ID",
+        "text": "={{ $json.alertText }}",
+        "additionalFields": {}
+      },
+      "id": "466786e8-72ea-448a-a27a-6cf1260a43bb",
+      "name": "Send Alert Every Shift",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        -1660,
+        -45
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Telegram account 2"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// This function filters and formats alert-worthy personnel\nconst highDifficultyThreshold = 11; \n\nconst rows = items;\nconst alerts = [];\n\nfor (const row of rows) {\n  const name = row.json['Name'];\n  const difficulty = parseFloat(row.json['Difficulty to Clear Leave']);\n\n  if (difficulty >= highDifficultyThreshold) {\n    alerts.push(`• ${name} – Difficulty to Clear Leave: ${difficulty.toFixed(2)}`);\n  }\n}\n\nreturn [{\n  json: {\n    alertText: alerts.length > 0 \n      ? `📢 *Leave Alert Summary (Every Shift)*\\n\\nThe following personnel need attention:\\n\\n${alerts.join('\\n')}`\n      : '✅ All personnel are within leave thresholds this week.'\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1880,
+        -45
+      ],
+      "id": "1fb5eb59-8a75-40c1-ba56-307fcc932080",
+      "name": "Filter Personnel by Difficulty"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "daysInterval": 3,
+              "triggerAtHour": 20
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -2320,
+        -45
+      ],
+      "id": "ac7bcf1a-bd9a-441a-ad56-5bca27f58c1e",
+      "name": "Trigger every shift"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_LEAVE_SHEET_ID",
+          "mode": "list",
+          "cachedResultName": "Firefighter_Leave_Planner",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1056074480,
+          "mode": "list",
+          "cachedResultName": "Individual Tracker2",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        -2100,
+        -45
+      ],
+      "id": "e258261b-82b1-459e-a07d-e6266815dce1",
+      "name": "Get Individual Stats",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "# Alert before every shift\nSends a formatted message at 8pm the evening before every shift with the people who need to clear their leave",
+        "height": 260,
+        "width": 920
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -2400,
+        -140
+      ],
+      "id": "77e8749b-3c34-46f7-9568-14132905597b",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "# Trigger via Telegram and check type of message",
+        "height": 560,
+        "width": 900
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -2380,
+        -720
+      ],
+      "id": "31d30899-7698-4476-a860-25814b8b6f37",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "description": "Call this tool to parse a formatted/semi-formatted whatsapp message into leave change commands in json",
+        "workflowId": {
+          "__rl": true,
+          "value": "QZOROqnJoKPUU4cw",
+          "mode": "list",
+          "cachedResultName": "STATION — Whatsapp Parser"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "raw": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('raw', ``, 'string') }}"
+          },
+          "matchingColumns": [
+            "raw"
+          ],
+          "schema": [
+            {
+              "id": "raw",
+              "displayName": "raw",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        -500,
+        -285
+      ],
+      "id": "5049e284-cd48-445c-b0fd-59b81165ce38",
+      "name": "Enter Whatsapp Calendar",
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "description": "Call this tool to update the calendar. The input should be in json in the following format for each update:\n\n{\n      \"date\": <string>,\n      \"slot\": <string>,\n      \"platoon\": <string>,\n      \"name\": <string>\n}",
+        "workflowId": {
+          "__rl": true,
+          "value": "omjNEf9paScWx1WM",
+          "mode": "list",
+          "cachedResultName": "STATION — Make Calendar Changes"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "date": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('date', `date of the leave assignment`, 'string') }}",
+            "slot": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('slot', `slot number (either L1, L2, L3, or KIV)`, 'string') }}",
+            "platoon": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('platoon', `platoon of the personnel (either P1 or P2)`, 'string') }}",
+            "name": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('name', `full name and rank of the personnel`, 'string') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "date",
+              "displayName": "date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "slot",
+              "displayName": "slot",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "platoon",
+              "displayName": "platoon",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        -360,
+        -280
+      ],
+      "id": "de4f4722-4057-4d5d-9a47-f33baa13384b",
+      "name": "Make Calendar Changes",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "={{ $json.output }}",
+        "additionalFields": {}
+      },
+      "id": "337a7ddb-0045-4bd7-97b3-fd4a88cce640",
+      "name": "Send Answer",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        -260,
+        -500
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Telegram account 2"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_CHATID_SHEET_ID",
+          "mode": "list",
+          "cachedResultName": "STATION Telegram Chat ID",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "chat_id": "={{ $json.message.chat.id }}",
+            "row_number": "2"
+          },
+          "matchingColumns": [
+            "row_number"
+          ],
+          "schema": [
+            {
+              "id": "chat_id",
+              "displayName": "chat_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        -2100,
+        -500
+      ],
+      "id": "4101e070-e7bc-489a-afd9-775e3217ab03",
+      "name": "Update chat id in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "⏳ Processing… Please wait a few seconds.",
+        "additionalFields": {}
+      },
+      "id": "8d24a3eb-19de-4d95-a8b8-83dbe9c1ee67",
+      "name": "Send Loading Message",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        -1180,
+        -500
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Telegram account 2"
+        }
+      },
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Update chat id in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Send Answer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Individual Leave Data": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Rota Leave Data": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Calendar": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Personnel Names": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Datetime": {
+      "main": [
+        [
+          {
+            "node": "Send Loading Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If new member added": {
+      "main": [
+        [
+          {
+            "node": "Send Description",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "If Bot Is Tagged",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Bot Is Tagged": {
+      "main": [
+        [
+          {
+            "node": "Get Datetime",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Operation, do nothing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Personnel by Difficulty": {
+      "main": [
+        [
+          {
+            "node": "Send Alert Every Shift",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trigger every shift": {
+      "main": [
+        [
+          {
+            "node": "Get Individual Stats",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Individual Stats": {
+      "main": [
+        [
+          {
+            "node": "Filter Personnel by Difficulty",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enter Whatsapp Calendar": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Make Calendar Changes": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update chat id in sheet": {
+      "main": [
+        [
+          {
+            "node": "If new member added",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Loading Message": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "timeSavedPerExecution": 2
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "id": "WORKFLOW_ID",
+  "tags": []
+}
